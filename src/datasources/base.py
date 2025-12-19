@@ -10,17 +10,10 @@ import geopandas as gpd
 # bbox는 항상 WGS84(lon/lat)로 받고, 계산은 나중에 INTERNAL_CRS로 변환하는 구조
 @dataclass(frozen=True)
 class BBox:
-    """
-    WGS84 bbox in lon/lat order.
-    - west, south, east, north are (lon, lat).
-    """
     west: float
     south: float
     east: float
     north: float
-
-    def as_tuple(self) -> tuple[float, float, float, float]:
-        return (self.west, self.south, self.east, self.north)
 
     def validate(self) -> None:
         if not (-180.0 <= self.west <= 180.0 and -180.0 <= self.east <= 180.0):
@@ -35,9 +28,6 @@ class BBox:
 
 @dataclass(frozen=True)
 class BuildingFetchOptions:
-    """
-    Standard output contract for all building datasources.
-    """
     target_crs: str = "EPSG:4326"          # CRS of returned GeoDataFrame
     default_height_m: float = 10.0         # fallback if no height is available
     keep_raw_properties: bool = True       # keep original columns
@@ -51,13 +41,6 @@ class BuildingSource(ABC):
 
     @abstractmethod
     def fetch(self, bbox: BBox, opts: BuildingFetchOptions) -> gpd.GeoDataFrame:
-        """
-        Must return a GeoDataFrame with:
-        - geometry: Polygon/MultiPolygon
-        - height_m: float (meters)
-        - source: str
-        CRS must be opts.target_crs.
-        """
         raise NotImplementedError
 
 
@@ -74,9 +57,8 @@ def safe_float(x: Any) -> Optional[float]:
 
 
 def normalize_height_from_hr(props: Dict[str, Any], default_height_m: float) -> float:
-    """
-    For your Molit/VWorld dt_d010 layer:
-    - hr: building height in meters
-    """
-    v = safe_float(props.get("hr"))
-    return v if v is not None else float(default_height_m)
+    for key in ["buld_hg", "hg", "hr"]:
+        v = safe_float(props.get(key))
+        if v is not None:
+            return v
+    return float(default_height_m)

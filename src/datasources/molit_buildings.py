@@ -10,26 +10,20 @@ import requests
 from dotenv import load_dotenv
 import pandas as pd
 
-from .base import BBox, BuildingFetchOptions, BuildingSource, normalize_height_from_hr
+from .base import BBox, BuildingFetchOptions, BuildingSource
 
 # .env (환경변수=키/도메인) 로드
 load_dotenv()
 
-
+# GIS건물일반정보WFS조회
 class MolitBuildingsWFS(BuildingSource):
-    """
-    VWorld NED 건물공간정보 WFS (getBldgisSpceWFS)
-    - typename: dt_d010
-    - EPSG:4326 bbox order is (ymin, xmin, ymax, xmax)
-    - hr: height (m), ar: area (㎡)
-    """
-    name = "molit_wfs_dt_d010"
+    name = "molit_wfs_dt_d162"
 
     def __init__(
         self,
         api_key: Optional[str] = None,
         domain: Optional[str] = None,
-        typename: str = "dt_d010",
+        typename: str = "dt_d162",
         timeout_s: int = 30,
     ):
         self.api_key = api_key or os.getenv("VWORLD_KEY")
@@ -37,7 +31,7 @@ class MolitBuildingsWFS(BuildingSource):
         self.typename = typename
         self.timeout_s = timeout_s
 
-        self.url = "https://api.vworld.kr/ned/wfs/getBldgisSpceWFS"
+        self.url = "https://api.vworld.kr/ned/wfs/getGisGnrlBuildingWFS"
 
     def fetch(self, bbox: BBox, opts: BuildingFetchOptions) -> gpd.GeoDataFrame:
         bbox.validate()
@@ -65,7 +59,7 @@ class MolitBuildingsWFS(BuildingSource):
 
         ct = r.headers.get("Content-Type", "")
         print("HTTP:", r.status_code, "Content-Type:", ct)
-        print("HEAD(200):", r.text[:200])  # 앞 200자만
+        print("HEAD(200):", r.text[:200]) 
 
         if "xml" not in ct.lower() and "gml" not in ct.lower():
             raise RuntimeError(f"Unexpected response Content-Type: {ct}\nHEAD:\n{r.text[:500]}")
@@ -78,7 +72,7 @@ class MolitBuildingsWFS(BuildingSource):
             tmp_path = f.name
 
         try:
-            gdf = gpd.read_file(tmp_path)
+            gdf = gpd.read_file(tmp_path) 
         finally:
             try:
                 os.remove(tmp_path)
@@ -87,39 +81,43 @@ class MolitBuildingsWFS(BuildingSource):
 
         if gdf.empty:
             return gpd.GeoDataFrame(
-                {"height_m": [], "source": []},
+                {"height_m": [], "ground_floors": [], "total_area": []},
                 geometry=[],
                 crs=opts.target_crs,
             )
 
+#############################################################################
         # 폴리곤만 유지
         gdf = gdf[gdf.geometry.type.isin(["Polygon", "MultiPolygon"])].copy()
 
-#################높이 컬럼 매핑##################
-        # 높이 hr -> height_m
-        # (혹시 문자열/None 섞여 있는 것도 처리
-        height_col = ["hg", "hr"]
+        field_mapping = {
+            "buld_hg": "height_m",  # 건물 높이 (m)
+            "ground_floor_co": "floors",  # 지상층수
+            "buld_totar": "total_area"  # 건물 연면적 (㎡)
+        }
 
-        height_col = next((c for c in height_col if c in gdf.columns), None)
+        gdf = gdf.rename(columns=field_mapping)
+        gdf = gdf[["height_m", "floors", "total_area", "geometry"]]
+        
+        # 결측치, 정규화, 중복제거
+        # height
+        gdf["height_m"] = (gdf["height_m"].astype(str).str.replace("m", "", regex=False).str.strip())
+        gdf["height_m"] = pd.to_numeric(gdf["height_m"], errors="coerce")
+        gdf["height_m"] = gdf["height_m"].fillna(opts.default_height_m).astype(float)
 
-        if height_col is not None:
-            s = gdf[height_col].astype(str).str.replace("m", "", regex=False).str.strip()
-            gdf["height_m"] = pd.to_numeric(s, errors="coerce")
-        else:
-            gdf["height_m"] = pd.NA
+        # total_area
+        gdf["total_area"] = pd.to_numeric(gdf["total_area"], errors="coerce")
 
-        gdf["height_m"] = gdf["height_m"].fillna(opts.default_height_m).astype(float)   
+        #geometry
+        gdf["geometry"] = gdf["geometry"].buffer(0)
+        gdf = gdf[~gdf.geometry.is_empty & gdf.geometry.notnull()]
 
-        gdf["source"] = self.name
+        gdf["__geom_wkb__"] = gdf.geometry.apply(lambda g: g.wkb)
+        gdf = gdf.drop_duplicates(subset="__geom_wkb__").drop(columns="__geom_wkb__")
 
-        # 표준 CRS로 변환
+        # 4326으로 변환
         if gdf.crs is None:
             gdf = gdf.set_crs("EPSG:4326")
         gdf = gdf.to_crs(opts.target_crs)
 
-        if opts.keep_raw_properties:
-            return gdf
-        else:
-            return gdf[["height_m", "source", "geometry"]]  
-        
-        print("height_col:", height_col, "height_m head:", gdf["height_m"].head().tolist())
+        return gdf

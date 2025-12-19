@@ -11,11 +11,11 @@ if __name__ == "__main__":
 )
 
     src = MolitBuildingsWFS()
-    opts = BuildingFetchOptions(target_crs="EPSG:4326", keep_raw_properties=True)
+    opts = BuildingFetchOptions(target_crs="EPSG:4326", default_height_m=10.0)
 
     gdf = src.fetch(bbox, opts)
 
     print("rows:", len(gdf))
     print("crs:", gdf.crs)
     print("cols:", list(gdf.columns))
-    print(gdf[["height_m", "source"]].head())
+    print(gdf[["height_m"]].head()) 
