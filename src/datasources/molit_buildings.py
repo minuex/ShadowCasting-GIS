@@ -1,4 +1,3 @@
-# src/datasources/molit_buildings.py
 from __future__ import annotations
 
 import os
@@ -12,7 +11,6 @@ import pandas as pd
 
 from .base import BBox, BuildingFetchOptions, BuildingSource
 
-# .env (환경변수=키/도메인) 로드
 load_dotenv()
 
 # GIS건물일반정보WFS조회
@@ -100,15 +98,12 @@ class MolitBuildingsWFS(BuildingSource):
         gdf = gdf[["height_m", "floors", "total_area", "geometry"]]
         
         # 결측치, 정규화, 중복제거
-        # height
         gdf["height_m"] = (gdf["height_m"].astype(str).str.replace("m", "", regex=False).str.strip())
         gdf["height_m"] = pd.to_numeric(gdf["height_m"], errors="coerce")
         gdf["height_m"] = gdf["height_m"].fillna(opts.default_height_m).astype(float)
 
-        # total_area
         gdf["total_area"] = pd.to_numeric(gdf["total_area"], errors="coerce")
 
-        #geometry
         gdf["geometry"] = gdf["geometry"].buffer(0)
         gdf = gdf[~gdf.geometry.is_empty & gdf.geometry.notnull()]
 

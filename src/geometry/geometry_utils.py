@@ -1,4 +1,3 @@
-# src/geometry/cleanup.py
 from shapely.geometry import Polygon, MultiPolygon, LineString
 from typing import List
 import geopandas as gpd
@@ -10,8 +9,9 @@ def clean_geometry(geom):
         geom = geom.buffer(0)
     return geom
 
-# 폴리곤 외곽에서 엣지 선분들을 추출
+# 폴리곤 외곽에서 엣지 선분들만 추출
 # interior ring은 무시
+# point, line 등은 무시
 def extract_edges(geom: Polygon | MultiPolygon) -> List[LineString]:
     edges = []
 
@@ -20,7 +20,7 @@ def extract_edges(geom: Polygon | MultiPolygon) -> List[LineString]:
     elif geom.geom_type == "MultiPolygon":
         rings = [p.exterior for p in geom.geoms]
     else:
-        return edges  # point, line 등은 무시
+        return edges  
 
     for ring in rings:
         coords = list(ring.coords)

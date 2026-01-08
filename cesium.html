@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>ShadowCasting-GIS (Cesium ion)</title>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.117/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <style>
+    html, body, #cesiumContainer { width:100%; height:100%; margin:0; padding:0; overflow:hidden; }
+    .ui {
+      position:absolute; top:12px; left:12px; z-index:10;
+      background: rgba(0,0,0,0.55); color:#fff; padding:10px 12px; border-radius:10px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; font-size: 13px;
+    }
+    .ui label { display:flex; gap:8px; align-items:center; margin:6px 0; }
+  </style>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+
+  <div class="ui">
+    <div style="font-weight:700; margin-bottom:6px;">Layers</div>
+    <label><input id="toggleOSM" type="checkbox" checked> OSM Buildings</label>
+    <label><input id="toggleShadow" type="checkbox" checked> Shadow</label>
+    <label><input id="toggleBuildings" type="checkbox"> Footprints (debug)</label>
+  </div>
+
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.117/Build/Cesium/Cesium.js"></script>
+  <script>
+
+    Cesium.Ion.defaultAccessToken = "토큰";
+
+    // Asset ID
+    const SHADOW_ASSET_ID = 4332642;
+    const BUILDINGS_ASSET_ID = 4332643; // null
+
+    const viewer = new Cesium.Viewer("cesiumContainer", {
+      terrain: Cesium.Terrain.fromWorldTerrain(),
+      animation: false,
+      timeline: false,
+    });
+
+    (async function main() {
+      try {
+        // OSM Buildings
+        const osm = await Cesium.createOsmBuildingsAsync();
+        viewer.scene.primitives.add(osm);
+
+        // Shadow GeoJSON (ion)
+        const shadowDs = await Cesium.GeoJsonDataSource.load(
+          Cesium.IonResource.fromAssetId(SHADOW_ASSET_ID),
+          { clampToGround: true }
+        );
+        viewer.dataSources.add(shadowDs);
+        console.log("shadow entities:", shadowDs.entities.values.length);
+        console.log("first entity:", shadowDs.entities.values[0]);
+
+        shadowDs.entities.values.forEach(e => {
+          if (e.polygon) {
+            e.polygon.material = Cesium.Color.BLACK.withAlpha(0.35);
+            e.polygon.outline = false;
+          }
+        });
+
+        await viewer.flyTo(shadowDs);
+
+        // Footprints(옵션)
+        let buildingsDs = null;
+
+        document.getElementById("toggleOSM").addEventListener("change", (ev) => {
+          osm.show = ev.target.checked;
+        });
+
+        document.getElementById("toggleShadow").addEventListener("change", (ev) => {
+          shadowDs.show = ev.target.checked;
+        });
+
+        document.getElementById("toggleBuildings").addEventListener("change", async (ev) => {
+          if (!BUILDINGS_ASSET_ID) return;
+
+          if (ev.target.checked) {
+            if (!buildingsDs) {
+              buildingsDs = await Cesium.GeoJsonDataSource.load(
+                Cesium.IonResource.fromAssetId(BUILDINGS_ASSET_ID),
+                { clampToGround: true }
+              );
+              viewer.dataSources.add(buildingsDs);
+
+              buildingsDs.entities.values.forEach(e => {
+                if (e.polygon) {
+                  e.polygon.material = Cesium.Color.YELLOW.withAlpha(0.15);
+                  e.polygon.outline = true;
+                  e.polygon.outlineColor = Cesium.Color.YELLOW.withAlpha(0.6);
+                }
+              });
+            }
+            buildingsDs.show = true;
+          } else {
+            if (buildingsDs) buildingsDs.show = false;
+          }
+        });
+
+      } catch (err) {
+        console.error("Cesium init error:", err);
+        alert("Cesium 에러 발생");
+      }
+    })();
+  </script>
+</body>
+</html>

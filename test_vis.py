@@ -9,7 +9,7 @@ from src.geometry.geometry_utils import extract_edges, clean_geometry
 from src.solar.sun_position import get_sun_position
 
 
-# 건물 가져오기
+# 건물 로드
 bbox = BBox(west=127.355, south=36.370, east=127.375, north=36.380)
 src = MolitBuildingsWFS()
 opts = BuildingFetchOptions(target_crs="EPSG:4326", default_height_m=10.0)
@@ -70,6 +70,4 @@ folium.GeoJson(
 
 folium.LayerControl(collapsed=False).add_to(m)
 
-# 지도 저장
 m.save("outputs/shadow_map.html")
-print("shadow_map.html 저장 완료")

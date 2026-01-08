@@ -1,5 +1,3 @@
-# src/solar/sun_position.py
-
 from datetime import datetime
 from typing import Tuple
 from astral.sun import azimuth, elevation
